@@ -6,11 +6,16 @@ Agent 运行期间保持 Mac 唤醒的 [pi](https://pi.dev) 扩展。通过调�
 
 | 事件 | 动作 |
 |------|------|
-| `agent_start` | 启动 `caffeinate -di` |
-| `agent_settled` | `SIGTERM` 终止 caffeinate(仅在 pi 确定不会自动继续时触发,重试/排队消息期间保持唤醒) |
+| `agent_start` | 启动 `caffeinate -di`,标题加 `☕️` 前缀 |
+| `agent_settled` | `SIGTERM` 终止 caffeinate 并还原标题(仅在 pi 确定不会自动继续时触发,重试/排队消息期间保持唤醒) |
+| `session_info_changed` / `session_start` | 若 caffeinate 仍在运行,延迟重新断言 `☕️` 标题(pi 在这些时机会重写标题) |
 | `session_shutdown` | 兜底清理进程 |
 
 `-d` 阻止显示器熄屏,`-i` 阻止系统空闲睡眠。非 macOS 平台直接 no-op,可安全同步到 Linux 机器。
+
+## 终端标题标记
+
+caffeinate 运行期间,终端标题会变为 `☕️ π - [会话名 -] 目录名`(与 pi 原生标题格式一致,仅加前缀);agent 结束后自动还原。pi 在 `/name` 改名、切换/新建/恢复会话时会重写标题,扩展监听 `session_info_changed` 和 `session_start` 延迟重新断言标记。
 
 ## 安装
 
