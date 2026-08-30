@@ -88,3 +88,7 @@ pi-espresso/
 - Syntax check: `node --check extensions/espresso.ts`
 - The extension only imports Node builtins at runtime; the `@earendil-works/pi-coding-agent` import is type-only.
 - For local use, symlink `extensions/espresso.ts` into `~/.pi/agent/extensions/` and edit in place — pi's loader follows symlinks.
+
+## License
+
+[MIT](LICENSE) © fxtack

@@ -88,3 +88,7 @@ pi-espresso/
 - 语法检查:`node --check extensions/espresso.ts`
 - 运行时只依赖 Node 内置模块;对 `@earendil-works/pi-coding-agent` 的导入是纯类型导入。
 - 本地使用:symlink `extensions/espresso.ts` 到 `~/.pi/agent/extensions/` 后直接在仓库里改,pi 的加载器支持 symlink。
+
+## 许可证
+
+[MIT](LICENSE) © fxtack

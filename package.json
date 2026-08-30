@@ -4,6 +4,8 @@
   "description": "Keeps the Mac awake (display + system idle) while the pi agent runs, with a ☕️ terminal title marker. A double shot over caffeinate -i: also prevents display sleep.",
   "keywords": ["pi-package", "caffeinate", "espresso", "keep-awake", "display-sleep", "macos"],
   "type": "module",
+  "author": "fxtack",
+  "license": "MIT",
   "pi": {
     "extensions": ["./extensions"]
   }
