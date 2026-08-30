@@ -47,7 +47,7 @@ caffeinate 运行期间,终端标题变为:
 pi install /path/to/pi-espresso
 
 # 方式二:从 git 仓库按 ref 安装
-pi install git:github.com/fxtack/pi-espresso@v1
+pi install git:github.com/fxtack/pi-espresso@v0.1.0
 
 # 方式三:把单文件 symlink 进全局扩展目录
 ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espresso.ts
