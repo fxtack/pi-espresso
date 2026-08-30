@@ -1,0 +1,10 @@
+{
+  "name": "pi-caffeinate",
+  "version": "0.1.0",
+  "description": "Keeps the Mac awake (display + system idle) while the pi agent is running",
+  "keywords": ["pi-package", "caffeinate", "macos", "keep-awake"],
+  "type": "module",
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}
