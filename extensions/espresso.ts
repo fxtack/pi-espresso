@@ -1,6 +1,6 @@
 /**
- * Keeps the Mac awake (display + system idle) while the agent is running,
- * and marks the terminal title with ☕️ while caffeinate is active.
+ * pi-espresso — Keeps the Mac awake (display + system idle) while the agent
+ * is running, and marks the terminal title with ☕️ while caffeinate is active.
  *
  * Spawns `caffeinate -di` on agent_start and terminates it on agent_settled
  * (fires when pi will not auto-retry or continue with queued messages).

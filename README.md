@@ -1,6 +1,8 @@
-# pi-caffeinate
+# pi-espresso
 
 Agent 运行期间保持 Mac 唤醒的 [pi](https://pi.dev) 扩展。通过调用 macOS 原生的 `caffeinate`,在 agent 工作时阻止显示器熄屏和系统空闲睡眠,空闲时立即释放。
+
+> ☕️ 名字里的梗:相比只压 `-i` 的同类扩展,pi-espresso 是一份双份浓缩——`-d` 连显示器一起管。
 
 ## 工作原理
 
@@ -21,13 +23,13 @@ caffeinate 运行期间,终端标题会变为 `☕️ π - [会话名 -] 目录�
 
 ```bash
 # 方式一:pi install 直接指向本目录(本地路径,写入 ~/.pi/agent/settings.json)
-pi install /path/to/pi-caffeinate
+pi install /path/to/pi-espresso
 
 # 方式二:推到 git 后按 ref 安装
-pi install git:github.com/<you>/pi-caffeinate@v1
+pi install git:github.com/<you>/pi-espresso@v1
 
 # 方式三:symlink 单文件到全局扩展目录(无需 settings.json)
-ln -s /path/to/pi-caffeinate/extensions/caffeinate.ts ~/.pi/agent/extensions/caffeinate.ts
+ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espresso.ts
 ```
 
 ## 已知边界
