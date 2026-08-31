@@ -19,11 +19,22 @@ The extension listens to pi's agent lifecycle events and manages a `caffeinate` 
 | `agent_start` | Spawns `caffeinate -di`, sets the ☕️ title marker |
 | `agent_settled` | Kills caffeinate (`SIGTERM`) and restores the title. `agent_settled` fires only when pi will not continue on its own — auto-retries, auto-compaction, and queued follow-up messages keep the assertion alive, with no flicker between them |
 | `session_info_changed` / `session_start` | If caffeinate is still active, re-asserts the ☕️ title after a short delay (pi rewrites the title on `/name` renames and session switch/new/resume/fork) |
+| `subagent:async-started` / `subagent:async-complete` | Tracks async subagents launched via [pi-subagents](https://www.npmjs.com/package/pi-subagents) on the in-process event bus — wake demand persists while any of them runs |
 | `session_shutdown` | Final cleanup |
 
 - `-d` prevents **display** sleep; `-i` prevents **system idle** sleep.
 - On non-macOS platforms the extension is a complete no-op — safe to sync across machines.
 - Title changes are guarded by `ctx.hasUI` and skipped in print/JSON modes.
+
+## Subagent awareness
+
+Subagents run in separate processes, but the main window still reflects them:
+
+- **Synchronous subagent calls** are already covered — they execute inside the main agent run, so the assertion never drops.
+- **Async / detached subagents** are tracked through pi-subagents' in-process lifecycle events (`subagent:async-started` / `subagent:async-complete`). While any async run is active, the main window keeps the ☕️ marker and holds a `caffeinate` assertion — even if the main agent itself is idle. When the last subagent settles, both are released.
+- On `/reload` or late pi-subagents readiness, the current active-run count is hydrated from pi-subagents' status RPC (`fleet.totalActive`), so a restarted extension instance picks up in-flight subagents.
+
+Subagent counting is additive with the main run: multiple concurrent caffeinate assertions coexist harmlessly on macOS, and the assertion is only released when both sources are idle.
 
 ## Terminal title marker
 
@@ -74,6 +85,7 @@ If you want display sleep untouched, use `pi-caffeinate`. If your problem is the
 
 - **`kill -9`**: pi has no event to catch `SIGKILL`, so caffeinate would be orphaned and keep the machine awake until it is killed manually. Mitigation idea: spawn with `caffeinate -di -w <pi-pid>` so caffeinate watches pi's pid and exits on its own. (`pi-caffeinate`'s `process.on("exit")` net covers crashes, SIGINT and SIGTERM — worth adopting; SIGKILL remains uncatchable by any means.)
 - **Custom-branded pi builds**: the title base is composed as `π - …` to match pi's default `APP_TITLE`. If your pi build renames itself via `piConfig.name`, the composed title will differ slightly until the next pi-driven rewrite self-heals it.
+- **Subagents with a custom `extensions` allowlist**: an agent config that declares `extensions: [...]` disables normal discovered extensions, so pi-espresso will not load inside those child processes. Foreground runs are still covered by the parent's assertion; for *background* runs of such agents, add the espresso extension path to that agent's `extensions` list (or `subagentOnlyExtensions`).
 
 ## Development
 

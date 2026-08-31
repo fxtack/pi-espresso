@@ -2,17 +2,23 @@
  * pi-espresso — Keeps the Mac awake (display + system idle) while the agent
  * is running, and marks the terminal title with ☕️ while caffeinate is active.
  *
- * Spawns `caffeinate -di` on agent_start and terminates it on agent_settled
- * (fires when pi will not auto-retry or continue with queued messages).
+ * Wake sources (either one holds the assertion up):
+ *  - the main agent run (agent_start → agent_settled; no flicker between
+ *    auto-retries, auto-compaction, or queued follow-up messages)
+ *  - async subagents launched via pi-subagents in this session, tracked via
+ *    the "subagent:async-started" / "subagent:async-complete" events on the
+ *    in-process pi.events bus, hydrated once per session from the
+ *    pi-subagents status RPC (covers /reload and late readiness)
  *
  * Title follows pi's own format ("π - [session - ]cwd"). pi rewrites the
  * title on session rename/switch/new/resume/fork, so the marker is
- * re-asserted shortly after those events while caffeinate is running.
+ * re-asserted shortly after those events while awake.
  *
  * macOS only; no-ops elsewhere.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -20,57 +26,129 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 // (package.json `piConfig.name`); the title self-heals on the next rename/switch.
 const APP_TITLE = "π";
 
+// pi-subagents lifecycle events (in-process, parent side only).
+const ASYNC_STARTED_EVENT = "subagent:async-started";
+const ASYNC_COMPLETE_EVENT = "subagent:async-complete";
+const RPC_REQUEST_EVENT = "subagents:rpc:v1:request";
+const RPC_READY_EVENT = "subagents:rpc:v1:ready";
+
 export default function (pi: ExtensionAPI) {
 	let proc: ChildProcess | null = null;
 	let pending: ReturnType<typeof setTimeout> | null = null;
+	let mainActive = false;
+	let subCount = 0;
+	let everRan = false;
+	let sessionLive = false;
+	let ctxRef: ExtensionContext | undefined;
 
-	const active = () => proc !== null;
+	const awake = () => mainActive || subCount > 0;
 
 	// Compose pi's title format, optionally prefixed with the caffeinate marker.
-	const setTitle = (ctx: ExtensionContext, caffeinate: boolean) => {
+	const setTitle = (ctx: ExtensionContext, marker: boolean) => {
 		if (!ctx.hasUI) return;
 		const cwdBasename = path.basename(ctx.sessionManager.getCwd());
 		const name = ctx.sessionManager.getSessionName();
 		const base = name ? `${APP_TITLE} - ${name} - ${cwdBasename}` : `${APP_TITLE} - ${cwdBasename}`;
-		ctx.ui.setTitle(caffeinate ? `☕️ ${base}` : base);
+		ctx.ui.setTitle(marker ? `☕️ ${base}` : base);
 	};
 
 	// Re-assert the marker after pi rewrites the title. Delayed so we run
 	// after pi's internal handler regardless of listener ordering.
 	const reassert = (ctx: ExtensionContext) => {
-		if (!active()) return;
+		if (!awake()) return;
 		if (pending) clearTimeout(pending);
 		pending = setTimeout(() => {
 			pending = null;
+			if (!awake()) return;
 			setTitle(ctx, true);
 		}, 50);
 	};
 
-	const start = (ctx: ExtensionContext) => {
-		if (process.platform !== "darwin" || proc) return;
-		// -d: prevent display sleep, -i: prevent system idle sleep
-		proc = spawn("caffeinate", ["-di"], { stdio: "ignore" });
-		proc.on("exit", () => (proc = null));
-		setTitle(ctx, true);
+	// Reconcile the caffeinate child process and title with current demand.
+	// The title is only ever touched after caffeinate has actually run at
+	// least once, so no-op platforms and print mode stay untouched.
+	const reconcile = (ctx?: ExtensionContext) => {
+		if (process.platform !== "darwin") return;
+		const shouldRun = awake();
+		if (shouldRun && !proc) {
+			// -d: prevent display sleep, -i: prevent system idle sleep
+			proc = spawn("caffeinate", ["-di"], { stdio: "ignore" });
+			proc.on("exit", () => (proc = null));
+			everRan = true;
+		} else if (!shouldRun && proc) {
+			proc.kill("SIGTERM");
+			proc = null;
+		}
+		if (ctx && everRan) setTitle(ctx, shouldRun);
 	};
 
-	const stop = (ctx?: ExtensionContext) => {
-		if (!proc) return;
-		proc.kill("SIGTERM");
-		proc = null;
-		// Only touch the title if caffeinate actually ran (non-macOS never does).
-		if (ctx) setTitle(ctx, false);
+	// Ask pi-subagents how many async runs are active right now and adopt the
+	// count if it is higher than what we tracked. Best effort: if the package
+	// is absent, old, or not ready yet, the reply never arrives and the
+	// listener is dropped after a short grace period. Bump-up-only adoption
+	// makes repeated hydrations (session_start + ready event) idempotent.
+	const hydrateFleet = () => {
+		if (process.platform !== "darwin" || !sessionLive) return;
+		const requestId = randomUUID();
+		const unsubscribe = pi.events.on(`subagents:rpc:v1:reply:${requestId}`, (raw) => {
+			unsubscribe();
+			const reply = raw as { success?: boolean; data?: { fleet?: { totalActive?: number } } };
+			const total = reply?.success ? reply?.data?.fleet?.totalActive : undefined;
+			if (typeof total === "number" && total > subCount) {
+				subCount = total;
+				reconcile(ctxRef);
+			}
+		});
+		pi.events.emit(RPC_REQUEST_EVENT, { version: 1, requestId, method: "status" });
+		setTimeout(() => unsubscribe(), 3000);
 	};
 
-	pi.on("agent_start", (_event, ctx) => start(ctx));
-	pi.on("agent_settled", (_event, ctx) => stop(ctx));
+	pi.on("session_start", async (_event, ctx) => {
+		ctxRef = ctx;
+		sessionLive = true;
+		reassert(ctx);
+		hydrateFleet();
+	});
+
+	// pi-subagents may become ready after our session_start; hydrate then too.
+	pi.events.on(RPC_READY_EVENT, () => hydrateFleet());
+
+	pi.events.on(ASYNC_STARTED_EVENT, () => {
+		if (!sessionLive) return;
+		subCount++;
+		reconcile(ctxRef);
+	});
+
+	pi.events.on(ASYNC_COMPLETE_EVENT, () => {
+		if (!sessionLive) return;
+		subCount = Math.max(0, subCount - 1);
+		reconcile(ctxRef);
+	});
+
+	pi.on("agent_start", (_event, ctx) => {
+		mainActive = true;
+		reconcile(ctx);
+	});
+
+	pi.on("agent_settled", (_event, ctx) => {
+		mainActive = false;
+		reconcile(ctx);
+	});
+
 	pi.on("session_info_changed", (_event, ctx) => reassert(ctx));
-	pi.on("session_start", (_event, ctx) => reassert(ctx));
+
 	pi.on("session_shutdown", () => {
+		sessionLive = false;
+		mainActive = false;
+		subCount = 0;
+		ctxRef = undefined;
 		if (pending) {
 			clearTimeout(pending);
 			pending = null;
 		}
-		stop();
+		if (proc) {
+			proc.kill("SIGTERM");
+			proc = null;
+		}
 	});
 }

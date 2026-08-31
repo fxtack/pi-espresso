@@ -19,11 +19,22 @@ pi 一跑起来经常是好几分钟——大型重构、测试套件、多步�
 | `agent_start` | 启动 `caffeinate -di`,设置 ☕️ 标题标记 |
 | `agent_settled` | `SIGTERM` 终止 caffeinate 并还原标题。`agent_settled` 只在 pi 确定不会自动继续时触发——自动重试、自动压缩、排队的后续消息期间断言持续存在,间隙不会抖动 |
 | `session_info_changed` / `session_start` | 若 caffeinate 仍在运行,短暂延迟后重新断言 ☕️ 标题(pi 在 `/name` 改名、切换/新建/恢复/fork 会话时会重写标题) |
+| `subagent:async-started` / `subagent:async-complete` | 通过进程内事件总线跟踪 [pi-subagents](https://www.npmjs.com/package/pi-subagents) 启动的异步子 agent——任一存活期间唤醒需求持续存在 |
 | `session_shutdown` | 兜底清理 |
 
 - `-d` 阻止**显示器**熄屏;`-i` 阻止**系统空闲**睡眠。
 - 非 macOS 平台完全 no-op——跨机器同步无副作用。
 - 标题操作受 `ctx.hasUI` 保护,print/JSON 模式下自动跳过。
+
+## 子 agent 感知
+
+子 agent 跑在独立进程里,但主窗口依然能反映它们:
+
+- **同步 subagent 调用**天然被覆盖——它们在主 agent run 内部执行,断言不会中断。
+- **异步 / detached 子 agent** 通过 pi-subagents 的进程内生命周期事件(`subagent:async-started` / `subagent:async-complete`)跟踪。任一异步运行存活期间,主窗口保持 ☕️ 标记并持有 `caffeinate` 断言——即使主 agent 本身已空闲。最后一个子 agent 结束时两者一并释放。
+- `/reload` 或 pi-subagents 晚于本扩展就绪时,通过其 status RPC(`fleet.totalActive`)水合当前活跃数,重启后的扩展实例能接上仍在飞行中的子 agent。
+
+子 agent 计数与主 run 相互独立、可叠加:macOS 允许多个 caffeinate 断言并存,只有两个来源同时空闲才释放。
 
 ## 终端标题标记
 
@@ -74,6 +85,7 @@ ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espress
 
 - **`kill -9`**:`SIGKILL` 无事件可捕获,caffeinate 会变成孤儿进程,持续阻止睡眠直到手动 kill。改进思路:用 `caffeinate -di -w <pi-pid>` 启动,让 caffeinate 自己监听 pi 的 pid、随之退出。(`pi-caffeinate` 的 `process.on("exit")` 兜底覆盖了崩溃、SIGINT、SIGTERM——值得借鉴;但 SIGKILL 谁也拦不住。)
 - **定制品牌的 pi 构建**:标题按 `π - …` 组合以匹配 pi 默认的 `APP_TITLE`。如果你的 pi 构建通过 `piConfig.name` 改了名,组合出的标题会略有出入,直到下一次 pi 主动重写标题时自愈。
+- **自定义 `extensions` 白名单的子 agent**:声明了 `extensions: [...]` 的 agent 配置会禁用常规发现的扩展,pi-espresso 不会在这类子进程里加载。前台运行仍由父进程断言覆盖;这类 agent 的**后台**运行,请把 espresso 扩展路径加进该 agent 的 `extensions` 列表(或 `subagentOnlyExtensions`)。
 
 ## 开发
 
