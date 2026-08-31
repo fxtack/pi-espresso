@@ -83,7 +83,7 @@ If you want display sleep untouched, use `pi-caffeinate`. If your problem is the
 
 ## Known limitations
 
-- **`kill -9`**: pi has no event to catch `SIGKILL`, so caffeinate would be orphaned and keep the machine awake until it is killed manually. Mitigation idea: spawn with `caffeinate -di -w <pi-pid>` so caffeinate watches pi's pid and exits on its own. (`pi-caffeinate`'s `process.on("exit")` net covers crashes, SIGINT and SIGTERM — worth adopting; SIGKILL remains uncatchable by any means.)
+- **`kill -9` / abrupt exit**: solved — the caffeinate child is spawned with `-w <pi-pid>`, so it watches pi's process and exits whenever pi dies, no matter how (including SIGKILL, or exiting while async subagents are still running).
 - **Custom-branded pi builds**: the title base is composed as `π - …` to match pi's default `APP_TITLE`. If your pi build renames itself via `piConfig.name`, the composed title will differ slightly until the next pi-driven rewrite self-heals it.
 - **Subagents with a custom `extensions` allowlist**: an agent config that declares `extensions: [...]` disables normal discovered extensions, so pi-espresso will not load inside those child processes. Foreground runs are still covered by the parent's assertion; for *background* runs of such agents, add the espresso extension path to that agent's `extensions` list (or `subagentOnlyExtensions`).
 

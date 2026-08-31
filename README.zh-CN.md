@@ -83,7 +83,7 @@ ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espress
 
 ## 已知限制
 
-- **`kill -9`**:`SIGKILL` 无事件可捕获,caffeinate 会变成孤儿进程,持续阻止睡眠直到手动 kill。改进思路:用 `caffeinate -di -w <pi-pid>` 启动,让 caffeinate 自己监听 pi 的 pid、随之退出。(`pi-caffeinate` 的 `process.on("exit")` 兜底覆盖了崩溃、SIGINT、SIGTERM——值得借鉴;但 SIGKILL 谁也拦不住。)
+- **`kill -9` / 异常退出**:已解决——caffeinate 子进程以 `-w <pi-pid>` 启动,监听 pi 的进程号,pi 无论以何种方式死亡(包括 SIGKILL,或异步子 agent 未完就退出)断言都随之消失。
 - **定制品牌的 pi 构建**:标题按 `π - …` 组合以匹配 pi 默认的 `APP_TITLE`。如果你的 pi 构建通过 `piConfig.name` 改了名,组合出的标题会略有出入,直到下一次 pi 主动重写标题时自愈。
 - **自定义 `extensions` 白名单的子 agent**:声明了 `extensions: [...]` 的 agent 配置会禁用常规发现的扩展,pi-espresso 不会在这类子进程里加载。前台运行仍由父进程断言覆盖;这类 agent 的**后台**运行,请把 espresso 扩展路径加进该 agent 的 `extensions` 列表(或 `subagentOnlyExtensions`)。
 

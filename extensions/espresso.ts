@@ -14,6 +14,10 @@
  * title on session rename/switch/new/resume/fork, so the marker is
  * re-asserted shortly after those events while awake.
  *
+ * The caffeinate child watches our own pid (`-w process.pid`), so it can
+ * never outlive pi — even if pi is killed with SIGKILL or exits while async
+ * subagents are still running, the assertion dies with the process.
+ *
  * macOS only; no-ops elsewhere.
  */
 
@@ -71,8 +75,9 @@ export default function (pi: ExtensionAPI) {
 		if (process.platform !== "darwin") return;
 		const shouldRun = awake();
 		if (shouldRun && !proc) {
-			// -d: prevent display sleep, -i: prevent system idle sleep
-			proc = spawn("caffeinate", ["-di"], { stdio: "ignore" });
+			// -d: prevent display sleep, -i: prevent system idle sleep,
+			// -w: exit automatically when pi's pid dies (crash safety net)
+			proc = spawn("caffeinate", ["-di", "-w", String(process.pid)], { stdio: "ignore" });
 			proc.on("exit", () => (proc = null));
 			everRan = true;
 		} else if (!shouldRun && proc) {
