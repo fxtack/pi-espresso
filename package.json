@@ -6,6 +6,12 @@
   "type": "module",
   "author": "fxtack",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fxtack/pi-espresso.git"
+  },
+  "homepage": "https://github.com/fxtack/pi-espresso#readme",
+  "bugs": "https://github.com/fxtack/pi-espresso/issues",
   "pi": {
     "extensions": ["./extensions"]
   }
