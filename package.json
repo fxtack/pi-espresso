@@ -2,8 +2,18 @@
   "name": "pi-espresso",
   "version": "0.2.0",
   "description": "Keeps the Mac awake (display + system idle) while the pi agent runs, with a ☕️ terminal title marker. A double shot over caffeinate -i: also prevents display sleep.",
-  "keywords": ["pi-package", "caffeinate", "espresso", "keep-awake", "display-sleep", "macos"],
+  "keywords": [
+    "pi-package",
+    "caffeinate",
+    "espresso",
+    "keep-awake",
+    "display-sleep",
+    "macos"
+  ],
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "author": "fxtack",
   "license": "MIT",
   "repository": {
@@ -19,6 +29,13 @@
     "@earendil-works/pi-coding-agent": ">=0.84.0"
   },
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.0.3",
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2"
   }
 }

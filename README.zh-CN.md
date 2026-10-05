@@ -94,9 +94,11 @@ pi-espresso/
 ├── extensions/
 │   └── espresso.ts    # 全部实现(单文件,零运行时依赖)
 ├── package.json       # pi 包清单
+├── tsconfig.json      # 类型检查配置(仅开发用)
 └── README.md
 ```
 
+- 类型检查:`npm install && npm run typecheck` —— 基于 pi 扩展类型跑 `tsc --noEmit`,用于预防 pi API 漂移(`@earendil-works/pi-coding-agent` 的 devDependency 仅供此检查)。
 - 语法检查:`node --check extensions/espresso.ts`
 - 运行时只依赖 Node 内置模块;对 `@earendil-works/pi-coding-agent` 的导入是纯类型导入。
 - 本地使用:symlink `extensions/espresso.ts` 到 `~/.pi/agent/extensions/` 后直接在仓库里改,pi 的加载器支持 symlink。

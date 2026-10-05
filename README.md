@@ -94,9 +94,11 @@ pi-espresso/
 ├── extensions/
 │   └── espresso.ts    # the entire extension (single file, zero runtime deps)
 ├── package.json       # pi package manifest
+├── tsconfig.json      # type-check config (development only)
 └── README.md
 ```
 
+- Type check: `npm install && npm run typecheck` — runs `tsc --noEmit` against the pi extension types. This is the guard that catches pi API drift (the `@earendil-works/pi-coding-agent` devDependency is for this check only).
 - Syntax check: `node --check extensions/espresso.ts`
 - The extension only imports Node builtins at runtime; the `@earendil-works/pi-coding-agent` import is type-only.
 - For local use, symlink `extensions/espresso.ts` into `~/.pi/agent/extensions/` and edit in place — pi's loader follows symlinks.
