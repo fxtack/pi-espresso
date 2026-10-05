@@ -49,7 +49,7 @@ This mirrors pi's native title format exactly, only prefixed. The marker is set 
 ## Requirements
 
 - **macOS** — `caffeinate` ships with macOS; nothing extra to install.
-- **pi** — any recent version; uses only the public extension API.
+- **pi** — 0.84.0 or newer (`agent_settled` is the release event; verified on 1.0.2). Peer requirement is declared in `package.json`.
 
 ## Install
 
@@ -58,7 +58,7 @@ This mirrors pi's native title format exactly, only prefixed. The marker is set 
 pi install /path/to/pi-espresso
 
 # Option 2: install from a git repo, pinned to a ref
-pi install git:github.com/fxtack/pi-espresso@v0.1.0
+pi install git:github.com/fxtack/pi-espresso@v0.2.0
 
 # Option 3: symlink the single file into the global extension directory
 ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espresso.ts

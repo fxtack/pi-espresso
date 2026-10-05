@@ -49,7 +49,7 @@ caffeinate 运行期间,终端标题变为:
 ## 环境要求
 
 - **macOS** —— `caffeinate` 是 macOS 自带的,无需额外安装。
-- **pi** —— 任意较新版本;只使用公开的扩展 API。
+- **pi** —— 0.84.0 或更高(`agent_settled` 是释放时机;已在 1.0.2 验证)。版本下限同时声明在 `package.json` 中。
 
 ## 安装
 
@@ -58,7 +58,7 @@ caffeinate 运行期间,终端标题变为:
 pi install /path/to/pi-espresso
 
 # 方式二:从 git 仓库按 ref 安装
-pi install git:github.com/fxtack/pi-espresso@v0.1.0
+pi install git:github.com/fxtack/pi-espresso@v0.2.0
 
 # 方式三:把单文件 symlink 进全局扩展目录
 ln -s /path/to/pi-espresso/extensions/espresso.ts ~/.pi/agent/extensions/espresso.ts

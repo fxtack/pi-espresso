@@ -12,6 +12,12 @@
   },
   "homepage": "https://github.com/fxtack/pi-espresso#readme",
   "bugs": "https://github.com/fxtack/pi-espresso/issues",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.84.0"
+  },
   "pi": {
     "extensions": ["./extensions"]
   }
