@@ -30,11 +30,60 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 // (package.json `piConfig.name`); the title self-heals on the next rename/switch.
 const APP_TITLE = "π";
 
+// --- pi-subagents integration contract -------------------------------------
+// pi-subagents is optional. When it is loaded in this process it publishes
+// two lifecycle events on pi.events (the in-process bus, parent side only):
+//
+//   subagent:async-started   one async/detached run (or workflow) started
+//   subagent:async-complete  one such run settled
+//
+// Those events are only sufficient while we observe the whole session. After
+// /reload, or when pi-subagents becomes ready after us, runs may already be
+// in flight, so we hydrate the current count through pi-subagents' versioned
+// RPC bridge instead of guessing:
+//
+//   emit   subagents:rpc:v1:request            { version: 1, requestId, method }
+//   reply  subagents:rpc:v1:reply:<requestId>  { version: 1, requestId, method,
+//                                                success, data }
+//   ready  subagents:rpc:v1:ready              (bridge became available)
+//
+// We speak only v1 and read only `status` replies. A reply is adopted only
+// when its version/method match and it carries a finite `data.fleet.totalActive`
+// (capability check, see readFleetTotalActive). Anything else — an absent or
+// older pi-subagents, a future v2 protocol, a malformed payload — is ignored,
+// and event-only counting keeps working. None of it can crash or wedge the
+// assertion. To move to a new protocol version, bump SUBAGENT_RPC_VERSION and
+// teach readFleetTotalActive the new payload; the event names are derived.
+const SUBAGENT_RPC_VERSION = 1 as const;
+const SUBAGENT_RPC_STATUS_METHOD = "status";
+const SUBAGENT_RPC_REQUEST_EVENT = `subagents:rpc:v${SUBAGENT_RPC_VERSION}:request`;
+const SUBAGENT_RPC_READY_EVENT = `subagents:rpc:v${SUBAGENT_RPC_VERSION}:ready`;
+const SUBAGENT_RPC_REPLY_PREFIX = `subagents:rpc:v${SUBAGENT_RPC_VERSION}:reply:`;
+// If pi-subagents is absent or not ready, no reply arrives; drop the one-shot
+// listener after this grace period so it cannot leak.
+const SUBAGENT_RPC_HYDRATE_TIMEOUT_MS = 3000;
+
 // pi-subagents lifecycle events (in-process, parent side only).
 const ASYNC_STARTED_EVENT = "subagent:async-started";
 const ASYNC_COMPLETE_EVENT = "subagent:async-complete";
-const RPC_REQUEST_EVENT = "subagents:rpc:v1:request";
-const RPC_READY_EVENT = "subagents:rpc:v1:ready";
+
+// Capability probe for an RPC reply. Returns the active fleet size only when
+// the reply is a v1 `status` success carrying a valid count; otherwise
+// undefined, so callers fall back to event-only counting.
+const readFleetTotalActive = (raw: unknown): number | undefined => {
+	if (typeof raw !== "object" || raw === null) return undefined;
+	const reply = raw as {
+		version?: unknown;
+		method?: unknown;
+		success?: unknown;
+		data?: { fleet?: { totalActive?: unknown } };
+	};
+	if (reply.version !== SUBAGENT_RPC_VERSION) return undefined;
+	if (reply.method !== SUBAGENT_RPC_STATUS_METHOD) return undefined;
+	if (reply.success !== true) return undefined;
+	const total = reply.data?.fleet?.totalActive;
+	return typeof total === "number" && Number.isFinite(total) && total >= 0 ? total : undefined;
+};
 
 export default function (pi: ExtensionAPI) {
 	let proc: ChildProcess | null = null;
@@ -88,24 +137,29 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	// Ask pi-subagents how many async runs are active right now and adopt the
-	// count if it is higher than what we tracked. Best effort: if the package
-	// is absent, old, or not ready yet, the reply never arrives and the
-	// listener is dropped after a short grace period. Bump-up-only adoption
-	// makes repeated hydrations (session_start + ready event) idempotent.
+	// count if it is higher than what we tracked. The reply is validated by
+	// readFleetTotalActive (version + method + shape); a missing or incompatible
+	// bridge never replies, so the one-shot listener is dropped after a short
+	// grace period. Bump-up-only adoption keeps repeated hydrations
+	// (session_start + ready event) idempotent, since the counter only ever
+	// moves down through the async-complete event.
 	const hydrateFleet = () => {
 		if (process.platform !== "darwin" || !sessionLive) return;
 		const requestId = randomUUID();
-		const unsubscribe = pi.events.on(`subagents:rpc:v1:reply:${requestId}`, (raw) => {
+		const unsubscribe = pi.events.on(`${SUBAGENT_RPC_REPLY_PREFIX}${requestId}`, (raw) => {
 			unsubscribe();
-			const reply = raw as { success?: boolean; data?: { fleet?: { totalActive?: number } } };
-			const total = reply?.success ? reply?.data?.fleet?.totalActive : undefined;
-			if (typeof total === "number" && total > subCount) {
+			const total = readFleetTotalActive(raw);
+			if (total !== undefined && total > subCount) {
 				subCount = total;
 				reconcile(ctxRef);
 			}
 		});
-		pi.events.emit(RPC_REQUEST_EVENT, { version: 1, requestId, method: "status" });
-		setTimeout(() => unsubscribe(), 3000);
+		pi.events.emit(SUBAGENT_RPC_REQUEST_EVENT, {
+			version: SUBAGENT_RPC_VERSION,
+			requestId,
+			method: SUBAGENT_RPC_STATUS_METHOD,
+		});
+		setTimeout(() => unsubscribe(), SUBAGENT_RPC_HYDRATE_TIMEOUT_MS);
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -116,8 +170,11 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	// pi-subagents may become ready after our session_start; hydrate then too.
-	pi.events.on(RPC_READY_EVENT, () => hydrateFleet());
+	pi.events.on(SUBAGENT_RPC_READY_EVENT, () => hydrateFleet());
 
+	// Event-only counting: one increment per async run start, one decrement per
+	// completion, clamped at zero. These events are already scoped to this
+	// parent session by pi-subagents, so the counter needs no session filter.
 	pi.events.on(ASYNC_STARTED_EVENT, () => {
 		if (!sessionLive) return;
 		subCount++;
